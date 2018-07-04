@@ -3,6 +3,27 @@
 #include <time.h>
 #include "matrix_misc.c"
 
+int* dot_omp(int* a, int* b, int size){
+  int* c = allocate_matrix(size);
+
+  #pragma omp parallel shared(a, b, c, size)
+  {
+    #pragma omp for schedule(static)
+    for(int i=0; i < size; i++){
+      for(int j=0; j < size; j++){
+        int sum = 0;
+
+        for(int k=0; k < size; k++){
+          sum += a[i*size+k] * b[k*size+j];
+        }
+        c[i * size + j] = sum;
+      }
+    }
+  }
+
+  return c;
+}
+
 int main(int argc, char** argv){
   int dim_matrix = 2048;
 
@@ -20,12 +41,12 @@ int main(int argc, char** argv){
 
   start = time(NULL);
 
-  int *c = dot(a, b, dim_matrix);
+  int* c = dot_omp(a, b, dim_matrix);
 
   end = time(NULL);
   time_used = ((double) end - start);
 
-  printf("Addition took %f seconds.", time_used);
+  printf("Addition took %f secs.", time_used);
 
   free(a);
   free(b);
