@@ -1,5 +1,17 @@
 #define RANDOM_SEED 20
 
+void print_matrix(int* mat, int size){
+  printf("{");
+  for(int i=0; i < size; i++){
+    printf("{");
+    for(int j=0; j < size; j++){
+      printf("%d,", mat[i * size + j]);
+    }
+    printf("}");
+  }
+  printf("}\n");
+}
+
 int* allocate_matrix(int size){
   return (int*) malloc(sizeof(int) * size * size);
 }

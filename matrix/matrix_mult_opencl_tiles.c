@@ -6,12 +6,12 @@
 #include "matrix_misc.c"
 
 int main(int argc, char** argv){
-  int dim_matrix = 1024;
+  int dim_matrix = 2048;
   int number_of_workitems = dim_matrix;
   int number_of_workitems_in_workgroup = 8;
-  int workgroup_count = number_of_workitems / number_of_workitems_in_workgroup;
+  int workgroup_count = 2 * (number_of_workitems / number_of_workitems_in_workgroup);
 
-  printf("Will launch %d work items in %d work groups (wg size = %d)\n", number_of_workitems, workgroup_count, number_of_workitems_in_workgroup);
+  printf("Will launch %d work items in %d work groups (wg size = %d)\n", number_of_workitems*number_of_workitems, workgroup_count, number_of_workitems_in_workgroup);
 
   int err;
 
@@ -32,7 +32,7 @@ int main(int argc, char** argv){
   start = clock();
 
   // get kernel source
-  char* kernel_source = read_kernel_file("matrix_mult_kernel.cl");
+  char* kernel_source = read_kernel_file("matrix_mult_kernel_tiles.cl");
 
   cl_device_id device_id;             // compute device id
   cl_context context;                 // compute context
@@ -112,7 +112,7 @@ int main(int argc, char** argv){
 
   // Create the compute kernel in the program we wish to run
   //
-  kernel = clCreateKernel(program, "matrix_mult", &err);
+  kernel = clCreateKernel(program, "matrix_mult_tiles", &err);
   if (!kernel || err != CL_SUCCESS)
   {
     printf("Error: Failed to create compute kernel!\n");
