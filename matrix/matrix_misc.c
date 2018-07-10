@@ -1,4 +1,4 @@
-#define RANDOM_SEED 20
+#define RANDOM_SEED 50
 
 void print_matrix(int* mat, int size){
   printf("{");
@@ -34,7 +34,7 @@ int* get_random_matrix(int size){
 
   for(int row_i=0; row_i < size; row_i++){
     for(int col_i=0; col_i < size; col_i++){
-      matrix[(row_i * size) + col_i] = rand() % RANDOM_SEED;
+      matrix[(row_i * size) + col_i] = rand() % RANDOM_SEED + 1;
     }
   }
 

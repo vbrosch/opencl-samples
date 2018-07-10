@@ -184,13 +184,18 @@ int main(int argc, char** argv){
 
   int* c_expected = matrix_vector_mult(a, v, dim_matrix);
 
+  int c_not_equal_0 = 0;
+
   for(int i=0; i < dim_matrix; i++){
+    if(c[i] != 0){
+      c_not_equal_0++;
+    }
     if(c_expected[i] != c[i]){
-      printf("%d: Expected %d got %d \n", i, c_expected[i], c[i]);
+      //printf("%d: Expected %d got %d \n", i, c_expected[i], c[i]);
     }
   }
 
-  printf("\nComparison finished \n");
+  printf("\nComparison finished, c != 0: %d \n", c_not_equal_0);
 
   clReleaseMemObject(a_mem);
   clReleaseMemObject(v_mem);

@@ -3,22 +3,25 @@
 #include <time.h>
 #include <CL/opencl.h>
 #include "../misc/opencl_utils.c"
-#include "reduce_misc.c"
+#include "vector_misc.c"
+#include <math.h>
 
 int main(int argc, char** argv){
-  int number_of_workitems = 512;
-  int number_of_workitems_in_workgroup = 32;
+  int dim_vector = pow(2,26);
+  int number_of_workitems = dim_vector;
+  int number_of_workitems_in_workgroup = 1;
   int workgroup_count = number_of_workitems / number_of_workitems_in_workgroup;
+
+  printf("Will launch %d work items in %d work groups (wg size = %d)\n",
+  number_of_workitems, workgroup_count, number_of_workitems_in_workgroup);
+
   int err;
 
-  int count = number_of_workitems;
+  int* v1 = get_random_vector(dim_vector);
+  printf("initialized vector v1\n");
 
-  printf("Will launch %d work items in %d work groups (wg size = %d)\n", number_of_workitems, workgroup_count, number_of_workitems_in_workgroup);
-
-  size_t data_size = sizeof(int) * count;
-  int* data = (int*) malloc(data_size);
-
-  generate_data(data, count);
+  int* v2 = get_random_vector(dim_vector);
+  printf("initialized vector v2\n");
 
   clock_t start, end;
   double time_used;
@@ -26,7 +29,7 @@ int main(int argc, char** argv){
   start = clock();
 
   // get kernel source
-  char* kernel_source = read_kernel_file("reduce_sum_kernel.cl");
+  char* kernel_source = read_kernel_file("vector_sum_kernel.cl");
 
   cl_device_id device_id;             // compute device id
   cl_context context;                 // compute context
@@ -35,16 +38,15 @@ int main(int argc, char** argv){
   cl_kernel kernel;                   // compute kernel
   char* device_name[128];
 
-  cl_mem data_mem;
-  cl_mem result_mem;
-  cl_mem length_mem;
+  cl_mem v1_mem;
+  cl_mem v2_mem;
+  cl_mem c_mem;
 
   size_t global_size[] = {number_of_workitems};
   size_t local_size[] = {number_of_workitems_in_workgroup};
 
-  size_t result_size = sizeof(int) * workgroup_count;
-
-  int* c = (int*) malloc(result_size);
+  size_t size_vector = sizeof(int) * dim_vector;
+  int* c = (int*) malloc(size_vector);
 
   int gpu = 1;
 
@@ -107,7 +109,7 @@ int main(int argc, char** argv){
 
   // Create the compute kernel in the program we wish to run
   //
-  kernel = clCreateKernel(program, "reduce_sum_kernel", &err);
+  kernel = clCreateKernel(program, "vector_sum", &err);
   if (!kernel || err != CL_SUCCESS)
   {
     printf("Error: Failed to create compute kernel!\n");
@@ -118,21 +120,22 @@ int main(int argc, char** argv){
 
   // Create the input and output arrays in device memory for our calculation
   //
-  data_mem = clCreateBuffer(context,  CL_MEM_COPY_HOST_PTR,  data_size, data, NULL);
-  result_mem = clCreateBuffer(context,  CL_MEM_WRITE_ONLY, result_size, NULL, NULL);
+  v1_mem = clCreateBuffer(context,  CL_MEM_COPY_HOST_PTR,  size_vector, v1, NULL);
+  v2_mem = clCreateBuffer(context,  CL_MEM_COPY_HOST_PTR,  size_vector, v2, NULL);
+  c_mem = clCreateBuffer(context,  CL_MEM_WRITE_ONLY, size_vector, NULL, NULL);
 
-  if (!data_mem || !result_mem)
+  if (!v1_mem || !v2_mem || !c_mem)
   {
       printf("Error: Failed to allocate device memory!\n");
       exit(1);
   }
 
-  printf("Successfully allocated device memory for Data, Result and Count.\n");
+  printf("Successfully allocated device memory for V1, V2 and result vector C.\n");
 
   err = 0;
-  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &data_mem);
-  err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &result_mem);
-  err |= clSetKernelArg(kernel, 2, sizeof(int), &count);
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &v1_mem);
+  err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &v2_mem);
+  err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &c_mem);
 
   if (err != CL_SUCCESS)
   {
@@ -143,10 +146,13 @@ int main(int argc, char** argv){
   // Execute the kernel over the entire range of our 1d input data set
   // using the maximum number of work group items for this device
   //
+
+  printf("Begin execution of kernel.\n");
+
   err = clEnqueueNDRangeKernel(commands, kernel, 1, NULL, global_size, local_size, 0, NULL, NULL);
   if (err)
   {
-      printf("Error: Failed to execute kernel! %d\n", err);
+      printf("Error: Failed to execute kernel %d!\n", err);
       return EXIT_FAILURE;
   }
 
@@ -156,7 +162,7 @@ int main(int argc, char** argv){
 
   printf("Kernel executed successfully, will write back results\n");
 
-  err = clEnqueueReadBuffer(commands, result_mem, CL_TRUE, 0, result_size, c, 0, NULL, NULL);
+  err = clEnqueueReadBuffer(commands, c_mem, CL_TRUE, 0, size_vector, c, 0, NULL, NULL);
 
   if (err != CL_SUCCESS)
   {
@@ -164,25 +170,33 @@ int main(int argc, char** argv){
       exit(1);
   }
 
-  int sum_cl = reduce_seq(c, workgroup_count, sum);
-
-  printf("Sum = %d\n", sum_cl);
-
   end = clock();
   time_used = ((double) end - start) / CLOCKS_PER_SEC * 1000.0f;
 
-  printf("Operation took %f ms.", time_used);
+  printf("Addition took %f ms.", time_used);
+  printf("Will compare the results now\n");
 
-  int sum_seq = reduce_seq(data, count, sum);
+  int* c_expected = vector_add(dim_vector, v1, v2);
 
-  if(sum_cl != sum_seq){
-    printf("Sequential sum differs: %d \n", sum_seq);
+  int c_not_equal_0 = 0;
+
+  for(int i=0; i < dim_vector; i++){
+    if(c[i] != 0){
+      c_not_equal_0++;
+    }
+    if(c_expected[i] != c[i]){
+      printf("%d: Expected %d got %d \n", i, c_expected[i], c[i]);
+    }
   }
 
-  printf("\nComparison finished \n");
+  printf("\nComparison finished, c != 0: %d \n", c_not_equal_0);
 
-  clReleaseMemObject(data_mem);
-  clReleaseMemObject(result_mem);
+  clReleaseMemObject(v1_mem);
+  clReleaseMemObject(v2_mem);
+  clReleaseMemObject(c_mem);
 
-  free(data);
+  free(v1);
+  free(v2);
+  free(c);
+  free(c_expected);
 }
