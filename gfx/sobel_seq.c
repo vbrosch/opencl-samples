@@ -4,20 +4,7 @@
 #include <math.h>
 #include "../misc/ppm_file.c"
 #include <CL/opencl.h>
-
-void grayScale(cl_ushort3* pixels, int width, int height){
-  for(int x = 0; x < width; x++){
-    for(int y = 0; y < height; y++){
-      cl_ushort3 pixel = pixels[x + y*width];
-
-      unsigned char gray = (pixel.x + pixel.y + pixel.z)/3;
-
-      pixels[x + y*width].x = gray;
-      pixels[x + y*width].y = gray;
-      pixels[x + y*width].z = gray;
-    }
-  }
-}
+#include "gfx_misc.c"
 
 int min(int a, int b){
   return a < b ? a : b;
